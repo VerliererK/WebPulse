@@ -1,0 +1,24 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "job",
+	"main": "src/index.ts",
+	"compatibility_date": "2025-04-09",
+	"observability": {
+		"enabled": true
+	},
+	"assets": {
+		"directory": "./public",
+		"binding": "ASSETS"
+	},
+	"kv_namespaces": [
+		{
+			"binding": "KV_BINDING",
+			"id": "62255c35f1104f7fa9d7697287566ece"
+		}
+	],
+	"triggers": {
+		"crons": [
+			"* * * * *"
+		]
+	}
+}
