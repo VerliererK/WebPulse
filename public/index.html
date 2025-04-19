@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebPulse</title>
+  <link href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+
+  <style>
+    body {
+      background: #444;
+      color: #eee;
+      padding: 0;
+      margin: 1em;
+      font-family: Roboto, Arial, sans-serif;
+      /* font-size: 16px; */
+    }
+
+    .main-block {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .url-list {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .no-select {
+      -webkit-user-select: none;
+      -ms-user-select: none;
+      user-select: none;
+    }
+  </style>
+
+  <style>
+    /* bootstrap overrides */
+    .btn-primary {
+      background-color: #39d2b4 !important;
+      border-color: #39d2b4 !important;
+    }
+
+    .spinner-border {
+      margin-bottom: 3rem;
+    }
+
+    .form-group {
+      display: flex;
+      justify-content: center;
+      width: 100%;
+      gap: 1rem;
+    }
+
+    .form-group * {
+      font-size: 16px;
+    }
+
+    .form-group #url {
+      max-width: 24rem;
+    }
+
+    .form-group #interval {
+      max-width: 6rem;
+    }
+
+    .form-check {
+      display: flex;
+      align-items: flex-start;
+    }
+
+    .form-check-label {
+      flex: auto;
+      overflow-wrap: anywhere;
+    }
+
+    .form-check-input {
+      cursor: pointer;
+      min-width: 32px;
+      scale: 1.5;
+      margin-right: 1rem;
+    }
+
+    .form-switch:has(input:checked) {
+      color: #39d2b4;
+    }
+
+    .form-check-input:checked {
+      background-color: #39d2b4;
+      border-color: #39d2b4;
+    }
+
+    .btn-delete {
+      padding: 2px 4px 0px;
+      margin-left: 2rem;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="main-block">
+    <h4>Urls</h4>
+    <div class="form-group" style="margin-bottom: 3rem;">
+      <input class="form-control" type="url" id="url" placeholder="Enter url">
+      <input class="form-control" type="number" id="interval" placeholder="minutes" min="1" max="3600">
+      <button class="btn btn-primary" onclick="addUrl()">+</button>
+    </div>
+
+    <div id="loading" class="spinner-border" role="status"></div>
+    <div id="urls" class="url-list"></div>
+
+    <div class="modal"></div>
+  </div>
+
+  <script>
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+    async function getJobs() {
+      const data = await fetch('/api/jobs').then(r => r.json());
+      return data || [];
+    }
+
+    async function init() {
+      const itemList = await getJobs();
+      updateUI(itemList);
+    }
+
+    function loading(show = true) {
+      document.getElementById("loading").hidden = !show;
+      document.querySelector(".modal").style.display = show ? "block" : "none";
+      document.querySelectorAll("button").forEach(btn => { btn.disabled = show; });
+    }
+
+    function selectUrlText(element) {
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+
+    function updateUI(list) {
+      const container = document.getElementById("urls");
+      container.innerHTML = "";
+
+      for (const { url, interval, enabled } of list) {
+        const el = document.createElement('div');
+        el.className = "form-check form-switch";
+        el.innerHTML = `
+        <input class="form-check-input" type="checkbox" ${enabled ? 'checked' : ''}>
+        <label class="form-check-label" style="opacity: 1">
+          <label onclick="selectUrlText(this)">${url}</label>
+          <label class="no-select">(${interval} minutes)</label>
+        </label>
+        <button class="btn btn-danger btn-delete"><i class="bi bi-trash"></i></button>
+        `;
+        el.querySelector('input').onchange = () => enabledUrl(url, el.querySelector('input').checked);
+        el.querySelector('button').onclick = () => removeUrl(url);
+        container.appendChild(el);
+      }
+      loading(false);
+    }
+
+    async function addUrl() {
+      const url = document.getElementById("url").value.trim();
+      const interval = +document.getElementById("interval").value;
+      if (!url || !interval) return;
+
+      loading(true);
+
+      await fetch('/api/jobs', {
+        method: "POST",
+        body: JSON.stringify({ url, interval, enabled: true })
+      });
+      url.value = "";
+      interval.value = "";
+      const list = await getJobs();
+      updateUI(list);
+    }
+
+    async function enabledUrl(url, enabled) {
+      await fetch('/api/jobs', {
+        method: "POST",
+        body: JSON.stringify({ url, enabled })
+      });
+
+      const list = await getJobs();
+      await sleep(500);
+      updateUI(list);
+    }
+
+    async function removeUrl(url) {
+      loading(true);
+      await fetch('/api/jobs', {
+        method: "DELETE",
+        body: JSON.stringify({ url })
+      });
+
+      const list = await getJobs();
+      updateUI(list);
+    }
+
+    init();
+  </script>
+</body>
+
+</html>
