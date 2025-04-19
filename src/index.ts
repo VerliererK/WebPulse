@@ -1,5 +1,7 @@
 import { Hono } from 'hono'
-import { fetch_timeout } from "./lib/utils";
+import { fetch_timeout, ntfy_notify } from "./lib/utils";
+import jpy from "./job/jpy";
+import freeios from "./job/freeios";
 
 type Bindings = {
   KV_BINDING: KVNamespace;
@@ -22,6 +24,24 @@ const getJobs = async (KV_BINDING: KVNamespace): Promise<JobConfig[]> => {
 const setJobs = (KV_BINDING: KVNamespace, jobs: JobConfig[]) => {
   return KV_BINDING.put('jobs:config', JSON.stringify(jobs));
 };
+
+const addApi = (name: string, callback: any) => {
+  app.get(`/api/${name}`, async (c) => {
+    const { KV_BINDING } = c.env;
+    const text = await KV_BINDING.get(`job:${name}:text`);
+    const updateText = await callback();
+    if (text !== updateText) {
+      await KV_BINDING.put(`job:${name}:text`, updateText);
+      await ntfy_notify(updateText, c.env.NTFY_TOPIC);
+    }
+    console.log(name, updateText);
+    return c.text(updateText);
+  });
+};
+
+addApi('jpy', jpy);
+
+addApi('freeios', freeios);
 
 app.get('/api/jobs', async (c) => {
   const jobs = await getJobs(c.env.KV_BINDING);
