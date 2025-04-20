@@ -5,13 +5,16 @@ compatibility_date = "2025-04-09"
 [observability]
 enabled = true
 
+[vars]
+API_HOST = "${API_HOST}"
+
 [assets]
 directory = "./public"
 binding = "ASSETS"
 
 [[kv_namespaces]]
 binding = "KV_BINDING"
-id = "62255c35f1104f7fa9d7697287566ece"
+id = "${KV_ID}"
 
 [triggers]
 crons = ["* * * * *"]
