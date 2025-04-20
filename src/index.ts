@@ -1,9 +1,15 @@
 import { Hono } from 'hono'
-import { fetch_timeout } from "./lib/utils";
+import { fetch_timeout, ntfy_notify } from "./lib/utils";
+import jpy from "./job/jpy";
+import freeios from "./job/freeios";
 
 type Bindings = {
   KV_BINDING: KVNamespace;
+  API_HOST: string;
+  NTFY_TOPIC: string;
 }
+
+const actions: Record<string, any> = {};
 
 const app = new Hono<{ Bindings: Bindings }>();
 
@@ -21,6 +27,29 @@ const getJobs = async (KV_BINDING: KVNamespace): Promise<JobConfig[]> => {
 const setJobs = (KV_BINDING: KVNamespace, jobs: JobConfig[]) => {
   return KV_BINDING.put('jobs:config', JSON.stringify(jobs));
 };
+
+const addAction = (name: string, callback: any) => {
+  actions[name] = async (env: Bindings) => {
+    const { KV_BINDING } = env;
+    const text = await KV_BINDING.get(`job:${name}:text`);
+    const updateText = await callback();
+    if (text !== updateText) {
+      await KV_BINDING.put(`job:${name}:text`, updateText);
+      await ntfy_notify(updateText, env.NTFY_TOPIC);
+    }
+    console.log(name, updateText);
+    return updateText;
+  };
+
+  app.get(`/api/${name}`, async (c) => {
+    const text = await actions[name](c.env);
+    return c.text(text);
+  });
+};
+
+addAction('jpy', jpy);
+
+addAction('freeios', freeios);
 
 app.get('/api/jobs', async (c) => {
   const jobs = await getJobs(c.env.KV_BINDING);
@@ -53,19 +82,35 @@ app.delete('/api/jobs', async (c) => {
   return c.text('ok');
 });
 
+const doJob = async (env: Bindings, job: JobConfig) => {
+  const { API_HOST, KV_BINDING } = env;
+  const { url, interval, enabled } = job;
+  if (!enabled) return;
+  const time = Number(await env.KV_BINDING.get(`job:${url}:time`) || 0);
+  if (Date.now() - time < interval * 1000 * 60) return;
+
+  // cloudflare not support fetch from another Worker on the same zone.
+  if (url.startsWith(API_HOST)) {
+    const action = url.split('/').pop();
+    if (action && actions[action]) {
+      console.log(`run action: ${action}`);
+      await actions[action](env);
+    }
+  } else {
+    console.log(`fetch: ${url}`);
+    await fetch_timeout(url, 1000).catch((e) => { });
+  }
+  await KV_BINDING.put(`job:${url}:time`, Date.now().toString());
+}
+
+const doJobs = async (env: Bindings) => {
+  const jobs = await getJobs(env.KV_BINDING);
+  await Promise.all(jobs.map(job => doJob(env, job)));
+}
+
 export default {
   fetch: app.fetch,
-  scheduled: async (batch: any, env: Bindings) => {
-    const { KV_BINDING } = env;
-    const jobs = await getJobs(KV_BINDING);
-    for (const { url, interval, enabled } of jobs) {
-      if (!enabled) continue;
-
-      const time = Number(await KV_BINDING.get(`job:${url}:time`) || 0);
-      if (Date.now() - time < interval * 1000 * 60) continue;
-
-      await fetch_timeout(url, 1000).catch(() => { });
-      await KV_BINDING.put(`job:${url}:time`, Date.now().toString());
-    }
+  async scheduled(event: ScheduledEvent, env: Bindings, ctx: ExecutionContext) {
+    ctx.waitUntil(doJobs(env));
   },
 }

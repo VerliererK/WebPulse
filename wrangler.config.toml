@@ -7,6 +7,7 @@ enabled = true
 
 [vars]
 API_HOST = "${API_HOST}"
+NTFY_TOPIC = "${NTFY_TOPIC}"
 
 [assets]
 directory = "./public"
