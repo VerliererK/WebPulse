@@ -32,13 +32,13 @@ const addAction = (name: string, callback: any) => {
   actions[name] = async (env: Bindings) => {
     const { KV_BINDING } = env;
     const text = await KV_BINDING.get(`job:${name}:text`);
-    const updateText = await callback();
-    if (text !== updateText) {
-      await KV_BINDING.put(`job:${name}:text`, updateText);
-      await ntfy_notify(updateText, env.NTFY_TOPIC);
+    const { update_text, needs_update } = await callback(text);
+    if (needs_update) {
+      await KV_BINDING.put(`job:${name}:text`, update_text);
+      await ntfy_notify(update_text, env.NTFY_TOPIC);
     }
-    console.log(name, updateText);
-    return updateText;
+    console.log(name, update_text);
+    return update_text;
   };
 
   app.get(`/api/${name}`, async (c) => {

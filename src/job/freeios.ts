@@ -3,7 +3,7 @@ const URLS = [
   'https://mrmad.com.tw/category/3c-information/free-app/',
 ]
 
-export default async () => {
+export default async (text: string) => {
   const taiwanDate = new Date().toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' });
   const get1 = fetch(URLS[0]).then(response => response.text()).then(html => {
     const titleRegex = /<h2 class="cs-entry__title"><a href="[^"]+">([^<]+)<\/a><\/h2>/g;
@@ -38,6 +38,7 @@ export default async () => {
   const latestApps = apps.filter(app => new Date(app.date) >= new Date(taiwanDate));
   if (latestApps.length === 0) return '';
 
-  const ret = `${taiwanDate}\n` + latestApps.map(app => app.title).join('\n');
-  return ret;
+  const update_text = `${taiwanDate}\n` + latestApps.map(app => app.title).join('\n');
+  const needs_update = update_text !== text;
+  return { update_text, needs_update };
 };
