@@ -83,11 +83,15 @@ app.delete('/api/jobs', async (c) => {
 });
 
 const doJob = async (env: Bindings, job: JobConfig) => {
-  const { API_HOST, KV_BINDING } = env;
+  const { API_HOST } = env;
   const { url, interval, enabled } = job;
   if (!enabled) return;
-  const time = Number(await env.KV_BINDING.get(`job:${url}:time`) || 0);
-  if (Date.now() - time < interval * 1000 * 60) return;
+
+  const now = new Date();
+  const utcMinutesOfDay = now.getUTCHours() * 60 + now.getUTCMinutes();
+  if (interval > 1 && (utcMinutesOfDay % interval !== 0)) {
+    return;
+  }
 
   // cloudflare not support fetch from another Worker on the same zone.
   if (url.startsWith(API_HOST)) {
@@ -100,7 +104,6 @@ const doJob = async (env: Bindings, job: JobConfig) => {
     console.log(`fetch: ${url}`);
     await fetch_timeout(url, 1000).catch((e) => { });
   }
-  await KV_BINDING.put(`job:${url}:time`, Date.now().toString());
 }
 
 const doJobs = async (env: Bindings) => {
