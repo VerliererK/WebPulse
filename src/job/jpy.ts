@@ -6,6 +6,6 @@ export default async (text: string) => {
   const lastRate = Number(text.split('： ')[1]) || 0;
 
   const update_text = `日円： ${rate}`;
-  const needs_update = update_text !== text && (rate * 10000 % 5 === 0 || Math.abs(lastRate - rate) * 10000 >= 5);
+  const needs_update = update_text !== text && (Math.abs(rate * 10000 % 5) < 1e-6 || Math.abs(lastRate - rate) * 10000 >= 5);
   return { update_text, needs_update };
 }
